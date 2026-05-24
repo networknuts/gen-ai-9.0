@@ -1,0 +1,2 @@
+user = "chuk"
+print(user)
