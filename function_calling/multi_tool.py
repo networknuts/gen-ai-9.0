@@ -4,6 +4,7 @@ import requests
 import os 
 import json
 
+
 # SETUP THE ENVIRONMENT
 load_dotenv()
 client = OpenAI()
@@ -18,9 +19,24 @@ def get_weather(zipcode):
     response = result.json()
     return response 
 
+# CREATE SECOND TOOL - GET ORDER DATA
+
+def get_order_data(user_id):
+    url = f"http://localhost:8080/delivery/{user_id}"
+    result = requests.get(url)
+    if result.status_code != 200:
+        return {"Error": "User Not Found"}
+    else:
+        return result.json()
+
 # READ THE WEATHER DESCRIPTION
 f = open("weather_description.txt","r")
 weather_description = f.read()
+f.close()
+
+# READ THE ORDERDATA DESCRIPTION
+f = open("orderdata_description.txt","r")
+orderdata_description = f.read()
 f.close()
 
 # TOOL SCHEMA
@@ -39,6 +55,21 @@ tool_schema = [
                 },
             },
             "required": ["zipcode"],
+        }
+    },
+    {
+        "type": "function",
+        "name": "get_order_data",
+        "description": orderdata_description,
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "user_id": {
+                    "type": "integer",
+                    "description": "the ID of the user to get order information about"
+                },
+            },
+            "required": ["user_id"]
         }
     }
 ]
@@ -64,6 +95,11 @@ for item in response.output:
         args = json.loads(item.arguments)
         if item.name == "get_weather":
             result = get_weather(args['zipcode'])
+            print("RAW FUNCTION OUTPUT")
+            print(result)
+            print("---------------------------")
+        elif item.name == "get_order_data":
+            result = get_order_data(args['user_id'])
             print("RAW FUNCTION OUTPUT")
             print(result)
             print("---------------------------")
