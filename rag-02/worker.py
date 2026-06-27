@@ -70,4 +70,9 @@ Context:
     input=query,
     instructions=SYSTEM_PROMPT
     )
-    print(response.output_text)
+    redis_client.set(
+        f"rag:response:{job_id}",
+        response.output_text,
+        ex=86400
+    )
+    print(f"Job {job_id} completed successfully!")
