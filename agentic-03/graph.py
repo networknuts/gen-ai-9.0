@@ -2,6 +2,8 @@ from dotenv import load_dotenv
 from langgraph.graph import StateGraph, END
 from typing import TypedDict
 from langchain_openai import ChatOpenAI
+from langgraph.checkpoint.mongodb import MongoDBSaver
+from pymongo import MongoClient
 import json
 
 # SETUP THE ENVIRONMENT
@@ -16,6 +18,9 @@ llm_qa = ChatOpenAI(
 )
 
 MAX_RETRIES = 3
+
+client = MongoClient("mongodb://localhost:27017")
+mongodb_client = MongoDBSaver(client)
 
 # DEFINE THE STATE
 class CodeState(TypedDict):
@@ -131,24 +136,36 @@ graph.add_edge("approved_node",END)
 graph.add_edge("failed_node", END)
 graph.add_edge("retry_node","developer")
 
-# COMPILE THE GRAPH
-app = graph.compile()
+memory = MongoDBSaver(client)
+app = graph.compile(checkpointer=memory)
 
-# EXECUTE THE GRAPH
-user_input = input("Enter app to build: ")
+# DECLARE THE UNIQUE IDENTIFIERS
+user_id = "1"
+session_id = "1"
 
-result = app.invoke({
-    "user_request": user_input,
-    "code": "",
-    "rating": 0,
-    "feedback": "",
-    "retries": 0,
-    "status": "running"
-})
+thread_id = f"{user_id}_{session_id}"
 
-print("\nFINAL OUTPUT\n")
-print(f"CODE: {result['code']}")
-print(f"RATING: {result['rating']}")
-print(f"FEEDBACK: {result['feedback']}")
-print(f"RETRIES: {result['retries']}")
-print(f"STATUS: {result['status']}")
+existing_thread = memory.get({"configurable": {"thread_id": thread_id}})
+
+try:
+    if existing_thread:
+        print("RESUMING FROM SAVED CHECKPOINTING")
+        result = app.invoke({},config={"configurable": {"thread_id": thread_id}})
+    else:
+        user_input = input("Enter app to build: ")
+        result = app.invoke({
+            "user_request": user_input,
+            "code": "",
+            "rating": 0,
+            "feedback": "",
+            "retries": 0,
+            "status": "running"
+        },config={"configurable": {"thread_id": thread_id}})
+    print("\nFINAL OUTPUT\n")
+    print(f"CODE: {result['code']}")
+    print(f"RATING: {result['rating']}")
+    print(f"FEEDBACK: {result['feedback']}")
+    print(f"RETRIES: {result['retries']}")
+    print(f"STATUS: {result['status']}")
+except Exception as e:
+    print(f"Error: {e}")
